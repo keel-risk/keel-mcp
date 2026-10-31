@@ -8,12 +8,12 @@
     "url": "https://github.com/Keel-Official/keel-mcp",
     "source": "github"
   },
-  "version": "0.1.0",
+  "version": "0.2.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@keel-official/mcp",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "transport": {
         "type": "stdio"
       },
@@ -28,11 +28,27 @@
         },
         {
           "name": "KEEL_TIMEOUT_MS",
-          "description": "Per request timeout in milliseconds.",
+          "description": "Per request timeout in milliseconds, for the Keel API and for each Soroban RPC step of audit_blend_pool.",
           "isRequired": false,
           "isSecret": false,
           "format": "number",
           "default": "15000"
+        },
+        {
+          "name": "KEEL_CACHE_TTL_MS",
+          "description": "Cache lifetime in milliseconds for the asset list and the methodology.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "number",
+          "default": "60000"
+        },
+        {
+          "name": "KEEL_SOROBAN_RPC_URL",
+          "description": "Soroban RPC used by audit_blend_pool to read Blend pools from Stellar mainnet.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string",
+          "default": "https://mainnet.sorobanrpc.com"
         }
       ]
     }

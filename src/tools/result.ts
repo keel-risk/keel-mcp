@@ -1,6 +1,7 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { KeelApiError } from '../api/client.js';
+import { BlendReadError } from '../blend/errors.js';
 import { InvalidAssetIdError } from '../domain/asset-id.js';
 
 /** Every tool answers with prose for the model and the exact figures as JSON. */
@@ -32,6 +33,11 @@ export function fail(error: unknown): CallToolResult {
     const hint = HINTS[error.code];
     text = `Keel API error ${error.code} (HTTP ${error.status}): ${error.message}${hint ? `\n${hint}` : ''}`;
     structured = { error: { code: error.code, status: error.status, message: error.message, detail: error.detail ?? null } };
+  } else if (error instanceof BlendReadError) {
+    text =
+      `${error.message}\nThe pool id may be fine: Soroban RPC did not answer, or the contract is not a Blend V2 ` +
+      'pool. Retry, or point KEEL_SOROBAN_RPC_URL at another mainnet RPC.';
+    structured = { error: { code: 'BLEND_READ_ERROR', poolId: error.poolId, message: error.message } };
   } else if (error instanceof InvalidAssetIdError) {
     text = error.message;
     structured = { error: { code: 'INVALID_ASSET_ID', message: error.message } };

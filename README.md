@@ -41,7 +41,7 @@ claude mcp add keel -- npx -y @keel-official/mcp
 }
 ```
 
-**From a checkout**, before the package is published:
+**From a checkout**, to run unreleased changes:
 
 ```bash
 npm install && npm run build
@@ -53,7 +53,7 @@ claude mcp add keel -- node /absolute/path/to/keel-mcp/dist/index.js
 | Variable | Default | Purpose |
 |---|---|---|
 | `KEEL_API_URL` | `https://api.keels.app/v1` | Point at another deployment, or at the contract mock (`http://localhost:4010`) |
-| `KEEL_TIMEOUT_MS` | `15000` | Per request timeout |
+| `KEEL_TIMEOUT_MS` | `15000` | Per request timeout, for the Keel API and for each Soroban RPC step of `audit_blend_pool` |
 | `KEEL_CACHE_TTL_MS` | `60000` | Cache for the asset list and methodology. Scans run every 15 minutes |
 | `KEEL_SOROBAN_RPC_URL` | `https://mainnet.sorobanrpc.com` | Soroban RPC used by `audit_blend_pool` to read Blend pools |
 

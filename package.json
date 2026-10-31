@@ -1,7 +1,7 @@
 {
   "name": "@keel-official/mcp",
   "mcpName": "io.github.Keel-Official/keel-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Model Context Protocol server for Keel, the liquidity risk engine for Stellar. Read-only.",
   "type": "module",
   "license": "MIT",
@@ -55,7 +55,7 @@
   },
   "dependencies": {
     "@blend-capital/blend-sdk": "^3.3.1",
-    "@modelcontextprotocol/sdk": "^1.17.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@stellar/stellar-sdk": "16.3.0",
     "decimal.js": "^10.6.0",
     "openapi-fetch": "^0.17.0",

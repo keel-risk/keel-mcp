@@ -3,6 +3,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { BlendReadError } from '../src/blend/errors.js';
 import { createKeelMcpServer } from '../src/server.js';
 import { assetFromPath, fakeFetch, loadRisk, USDY_A, USDY_B, USTRY } from './helpers.js';
 
@@ -27,6 +28,8 @@ function usdy(id: string) {
 }
 
 const assets = [summary(ustry), summary(xlm), usdy(USDY_A), usdy(USDY_B)];
+
+const UNREADABLE_POOL = `C${'A'.repeat(55)}`;
 
 function route(url: URL) {
   const path = decodeURIComponent(url.pathname);
@@ -91,6 +94,9 @@ beforeEach(async () => {
     fetch: fake.fetch,
     blendAudit: async (poolIds) => {
       blendCalls.push(poolIds);
+      if (poolIds.includes(UNREADABLE_POOL)) {
+        throw new BlendReadError(UNREADABLE_POOL, `Reading the pool metadata for pool ${UNREADABLE_POOL}: no answer within 15000 ms`);
+      }
       return poolIds.map((poolId) => ({
         pool: { poolId, name: 'TestPool', status: 3, statusLabel: 'on-ice (new borrowing disabled)', oracle: 'C', latestLedger: 1, loadedAt: 't', rpcUrl: 'r' },
         reserves: [],
@@ -216,6 +222,14 @@ describe('keel-mcp server', () => {
     const { result } = await call('audit_blend_pool', { pool: 'Aave' });
     expect(result.isError).toBe(true);
     expect(blendCalls).toHaveLength(0);
+  });
+
+  it('audit_blend_pool reports an unreadable pool as a read error, not an input error', async () => {
+    const { result, text, data } = await call('audit_blend_pool', { pool: UNREADABLE_POOL });
+    expect(result.isError).toBe(true);
+    expect(data.error.code).toBe('BLEND_READ_ERROR');
+    expect(data.error.poolId).toBe(UNREADABLE_POOL);
+    expect(text).toContain('KEEL_SOROBAN_RPC_URL');
   });
 
   it('keel_status reports the latest scan', async () => {

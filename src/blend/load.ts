@@ -1,8 +1,17 @@
-import { getOracleDecimals, getOraclePrice, PoolMetadata, PoolV2, type Network } from '@blend-capital/blend-sdk';
+import {
+  getOracleDecimals,
+  getOraclePrice,
+  PoolMetadata,
+  PoolV2,
+  type Network,
+  type ReserveConfig,
+  type ReserveConfigV2,
+} from '@blend-capital/blend-sdk';
 import { Asset, Networks } from '@stellar/stellar-sdk';
 
 import type { AssetSummary } from '../api/client.js';
 import { D } from '../domain/decimal.js';
+import { BlendReadError } from './errors.js';
 import { DEFAULT_SOROBAN_RPC_URL, poolStatusLabel } from './pools.js';
 
 /**
@@ -46,6 +55,28 @@ export interface BlendLoadOptions {
   rpcUrl?: string;
   /** Oracle reads are one simulation per asset; skip them when only sizes matter. */
   withOraclePrices?: boolean;
+  /** Limit for each Soroban RPC step. Defaults to 15 seconds. */
+  timeoutMs?: number;
+}
+
+/** The SDK takes no abort signal, so a hung RPC is cut off here instead. */
+async function step<T>(poolId: string, what: string, timeoutMs: number, run: () => Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new BlendReadError(poolId, `${what} for pool ${poolId}: no answer within ${timeoutMs} ms`)),
+      timeoutMs,
+    );
+  });
+  try {
+    return await Promise.race([run(), timeout]);
+  } catch (cause) {
+    if (cause instanceof BlendReadError) throw cause;
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    throw new BlendReadError(poolId, `${what} for pool ${poolId} failed: ${reason}`);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function network(rpcUrl: string): Network {
@@ -56,20 +87,32 @@ function scaled(value: bigint | number, decimals: number): string {
   return new D(value.toString()).div(new D(10).pow(decimals)).toString();
 }
 
+function isV2Config(config: ReserveConfig): config is ReserveConfigV2 {
+  const v2 = config as Partial<ReserveConfigV2>;
+  return typeof v2.supply_cap === 'bigint' && typeof v2.enabled === 'boolean';
+}
+
 export async function loadBlendPool(poolId: string, options: BlendLoadOptions = {}): Promise<BlendPoolSnapshot> {
   const rpcUrl = options.rpcUrl ?? DEFAULT_SOROBAN_RPC_URL;
+  const timeoutMs = options.timeoutMs ?? 15_000;
   const net = network(rpcUrl);
-  const metadata = await PoolMetadata.load(net, poolId);
-  const pool = await PoolV2.loadWithMetadata(net, poolId, metadata);
+  const metadata = await step(poolId, 'Reading the pool metadata', timeoutMs, () => PoolMetadata.load(net, poolId));
+  const pool = await step(poolId, 'Reading the pool reserves', timeoutMs, () =>
+    PoolV2.loadWithMetadata(net, poolId, metadata),
+  );
 
   const prices = new Map<string, { price: string; timestamp: number }>();
   if (options.withOraclePrices !== false) {
     try {
-      const { decimals } = await getOracleDecimals(net, metadata.oracle);
+      const { decimals } = await step(poolId, 'Reading the oracle decimals', timeoutMs, () =>
+        getOracleDecimals(net, metadata.oracle),
+      );
       await Promise.all(
         [...pool.reserves.keys()].map(async (assetId) => {
           try {
-            const data = await getOraclePrice(net, metadata.oracle, assetId);
+            const data = await step(poolId, 'Reading an oracle price', timeoutMs, () =>
+              getOraclePrice(net, metadata.oracle, assetId),
+            );
             prices.set(assetId, { price: scaled(data.price, decimals), timestamp: data.timestamp });
           } catch {
             // A missing price is reported as null, never as zero.
@@ -83,15 +126,22 @@ export async function loadBlendPool(poolId: string, options: BlendLoadOptions = 
 
   const reserves = [...pool.reserves.values()]
     .map((reserve): BlendReserveSnapshot => {
-      const decimals = reserve.config.decimals;
-      const config = reserve.config as typeof reserve.config & { supply_cap?: bigint; enabled?: boolean };
+      const config = reserve.config;
+      // A missing cap must never read as a cap of 0, which the audit would call within.
+      if (!isV2Config(config)) {
+        throw new BlendReadError(
+          poolId,
+          `Pool ${poolId} reserve ${reserve.assetId} has no Blend V2 supply cap; only Blend V2 pools can be audited.`,
+        );
+      }
+      const decimals = config.decimals;
       const price = prices.get(reserve.assetId);
       return {
         assetContractId: reserve.assetId,
         decimals,
-        collateralFactor: scaled(reserve.config.c_factor, 7),
-        enabled: config.enabled ?? true,
-        supplyCap: scaled(config.supply_cap ?? 0n, decimals),
+        collateralFactor: scaled(config.c_factor, 7),
+        enabled: config.enabled,
+        supplyCap: scaled(config.supply_cap, decimals),
         totalSupplied: scaled(reserve.totalSupply(), decimals),
         totalBorrowed: scaled(reserve.totalLiabilities(), decimals),
         oraclePrice: price?.price ?? null,

@@ -16,7 +16,7 @@ import { registerStatus } from './tools/status.js';
 import { registerTradeDepth } from './tools/trade-depth.js';
 
 export const SERVER_NAME = 'keel';
-export const SERVER_VERSION = '0.1.0';
+export const SERVER_VERSION = '0.2.0';
 
 const INSTRUCTIONS = `Keel measures the executable liquidity behind Stellar asset prices: how much volume the SDEX order book and AMM pools can absorb at +/-2%, 5% and 10%, and the largest collateral position that liquidity can safely support.
 
@@ -58,7 +58,11 @@ export function createKeelMcpServer(options: KeelMcpOptions = {}) {
     server,
     options.blendAudit ??
       ((poolIds, { withOraclePrices }) =>
-        runBlendAudit(api, poolIds, { rpcUrl: options.sorobanRpcUrl, withOraclePrices })),
+        runBlendAudit(api, poolIds, {
+          rpcUrl: options.sorobanRpcUrl,
+          timeoutMs: options.timeoutMs,
+          withOraclePrices,
+        })),
   );
   registerResources(server, api, options.fetch);
   registerPrompts(server);

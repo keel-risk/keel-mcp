@@ -1,5 +1,5 @@
 // Copies the API contract from a sibling keel-backend checkout and records its
-// version in package.json, so that test/contract.test.ts can tell when the copy
+// version in package.json, so that test/static.test.ts can tell when the copy
 // here has drifted from the version this server was written against.
 //
 // Usage: npm run sync:contract [-- /path/to/keel-backend]
